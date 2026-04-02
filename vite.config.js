@@ -9,10 +9,6 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: false,
-    minify: 'esbuild'
-  },
-  css: {
-    postcss: './postcss.config.js'
+    sourcemap: false
   }
 })

@@ -3,6 +3,10 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
+    "./src/components/**/*.{js,ts,jsx,tsx}",
+    "./src/page/**/*.{js,ts,jsx,tsx}",
+    "./src/system/**/*.{js,ts,jsx,tsx}",
+    "./src/lib/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
     extend: {
@@ -33,22 +37,15 @@ export default {
         }
       },
       animation: {
-        'typing': 'typing 0.05s linear',
         'fade-in': 'fadeIn 0.3s ease-out',
         'slide-in-left': 'slideInLeft 0.3s ease-out',
         'slide-in-right': 'slideInRight 0.3s ease-out',
-        'blur-in': 'blurIn 0.3s ease-out',
-        'pulse-fast': 'pulse 0.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
         'loading-dot': 'loadingDot 1.4s ease-in-out infinite',
       },
       keyframes: {
-        typing: {
-          '0%': { opacity: 0, transform: 'translateY(5px)' },
-          '100%': { opacity: 1, transform: 'translateY(0)' }
-        },
         fadeIn: {
-          '0%': { opacity: 0 },
-          '100%': { opacity: 1 }
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' }
         },
         slideInLeft: {
           '0%': { transform: 'translateX(-100%)' },
@@ -58,14 +55,10 @@ export default {
           '0%': { transform: 'translateX(100%)' },
           '100%': { transform: 'translateX(0)' }
         },
-        blurIn: {
-          '0%': { opacity: 0, filter: 'blur(8px)' },
-          '100%': { opacity: 1, filter: 'blur(0)' }
-        },
         loadingDot: {
-          '0%, 20%': { opacity: 0.2, transform: 'scale(0.8)' },
-          '50%': { opacity: 1, transform: 'scale(1.2)' },
-          '80%, 100%': { opacity: 0.2, transform: 'scale(0.8)' }
+          '0%, 20%': { opacity: '0.2', transform: 'scale(0.8)' },
+          '50%': { opacity: '1', transform: 'scale(1.2)' },
+          '80%, 100%': { opacity: '0.2', transform: 'scale(0.8)' }
         }
       }
     },

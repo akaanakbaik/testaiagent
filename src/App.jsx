@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react'
 import ChatInterface from './components/ChatInterface'
 import Sidebar from './components/Sidebar'
 import PageSidebar from './components/PageSidebar'
+import Dashboard from './page/Dashboard'
 import { Menu, FileStack } from 'lucide-react'
 
 function App() {
@@ -105,13 +106,7 @@ function App() {
 
   const activeSession = sessions.find(s => s.id === activeSessionId)
 
-  const handleBlurClick = useCallback((e) => {
-    if (isLeftSidebarOpen || isRightSidebarOpen) {
-      e?.stopPropagation()
-    }
-  }, [isLeftSidebarOpen, isRightSidebarOpen])
-
-  const handleTripleClick = useCallback(() => {
+  const tripleClickHandler = useCallback(() => {
     let clickCount = 0
     let timeoutId = null
     return () => {
@@ -126,10 +121,10 @@ function App() {
     }
   }, [])
 
-  const tripleClickHandler = handleTripleClick()
+  const handleTripleClick = tripleClickHandler()
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden" onClick={tripleClickHandler}>
+    <div className="relative h-screen w-screen overflow-hidden bg-dark-900" onClick={handleTripleClick}>
       {(isLeftSidebarOpen || isRightSidebarOpen) && (
         <div 
           className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40 transition-all duration-300"
@@ -188,15 +183,7 @@ function App() {
           )}
           
           {currentPage === 'dashboard' && (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center">
-                <div className="w-24 h-24 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
-                  <span className="text-4xl">📊</span>
-                </div>
-                <h2 className="text-2xl font-semibold mb-2">Dashboard</h2>
-                <p className="text-gray-400">Coming soon...</p>
-              </div>
-            </div>
+            <Dashboard />
           )}
         </div>
       </div>

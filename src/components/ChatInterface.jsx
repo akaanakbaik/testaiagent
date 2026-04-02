@@ -1,245 +1,339 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Plus, 
-  Trash2, 
-  Edit2, 
-  Pin, 
-  PinOff, 
-  X,
-  Check,
-  AlertCircle
-} from 'lucide-react'
+import { Send, Search, Brain, Maximize2, Minimize2, X } from 'lucide-react'
+import MessageBubble from './MessageBubble'
+import axios from 'axios'
 
-const Sidebar = ({ 
-  isOpen, 
-  onClose, 
-  sessions, 
-  activeSessionId, 
-  onSelectSession, 
-  onCreateNew, 
-  onUpdateName, 
-  onTogglePin, 
-  onDelete, 
-  maxSessions 
-}) => {
-  const [editingId, setEditingId] = useState(null)
-  const [editName, setEditName] = useState('')
-  const [showLimitAlert, setShowLimitAlert] = useState(false)
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null)
+const ChatInterface = ({ session, onUpdateMessages, onUpdateSessionName }) => {
+  const [inputValue, setInputValue] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isThinkingMode, setIsThinkingMode] = useState(false)
+  const [isSearchMode, setIsSearchMode] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(false)
+  const [streamingMessage, setStreamingMessage] = useState(null)
+  const messagesEndRef = useRef(null)
+  const textareaRef = useRef(null)
+  const abortControllerRef = useRef(null)
 
-  const sortedSessions = [...sessions].sort((a, b) => {
-    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1
-    return new Date(b.createdAt) - new Date(a.createdAt)
-  })
+  const messages = session.messages || []
 
-  const handleCreateNew = () => {
-    if (sessions.length >= maxSessions) {
-      setShowLimitAlert(true)
-      setTimeout(() => setShowLimitAlert(false), 3000)
-      return
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, streamingMessage, scrollToBottom])
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto'
+      const newHeight = Math.min(textareaRef.current.scrollHeight, 200)
+      textareaRef.current.style.height = `${newHeight}px`
     }
-    onCreateNew()
-  }
+  }, [inputValue])
 
-  const handleDeleteClick = (sessionId) => {
-    setDeleteConfirmId(sessionId)
-  }
+  const generateSessionName = useCallback(async (firstMessage) => {
+    try {
+      const response = await axios.post(`${import.meta.env.VITE_API_URL}/generate-title`, {
+        message: firstMessage.slice(0, 100)
+      })
+      const newName = response.data.title || firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+      onUpdateSessionName(newName)
+    } catch (error) {
+      const fallbackName = firstMessage.slice(0, 30) + (firstMessage.length > 30 ? '...' : '')
+      onUpdateSessionName(fallbackName)
+    }
+  }, [onUpdateSessionName])
 
-  const handleConfirmDelete = () => {
-    if (deleteConfirmId) {
-      onDelete(deleteConfirmId)
-      setDeleteConfirmId(null)
+  const sendMessage = useCallback(async () => {
+    if (!inputValue.trim() || isLoading) return
+
+    const userMessage = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: inputValue.trim(),
+      timestamp: new Date().toISOString()
+    }
+
+    const updatedMessages = [...messages, userMessage]
+    onUpdateMessages(updatedMessages)
+    setInputValue('')
+    setIsLoading(true)
+    setStreamingMessage(null)
+
+    const isFirstMessage = messages.length === 0
+    if (isFirstMessage) {
+      await generateSessionName(userMessage.content)
+    }
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    abortControllerRef.current = new AbortController()
+
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          message: userMessage.content,
+          sessionId: session.id,
+          history: updatedMessages,
+          mode: {
+            fast: !isThinkingMode && !isSearchMode,
+            thinking: isThinkingMode,
+            search: isSearchMode
+          }
+        }),
+        signal: abortControllerRef.current.signal
+      })
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let accumulatedContent = ''
+      let reasoningContent = ''
+      let sources = []
+      let agents = []
+
+      const assistantMessageId = (Date.now() + 1).toString()
+      setStreamingMessage({
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        reasoning: '',
+        sources: [],
+        agents: [],
+        timestamp: new Date().toISOString()
+      })
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+
+        const chunk = decoder.decode(value)
+        const lines = chunk.split('\n')
+        
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6))
+              
+              if (data.type === 'content') {
+                accumulatedContent += data.content
+                setStreamingMessage(prev => ({
+                  ...prev,
+                  content: accumulatedContent
+                }))
+              } else if (data.type === 'reasoning') {
+                reasoningContent += data.content
+                setStreamingMessage(prev => ({
+                  ...prev,
+                  reasoning: reasoningContent
+                }))
+              } else if (data.type === 'source') {
+                sources.push(data.source)
+                setStreamingMessage(prev => ({
+                  ...prev,
+                  sources: [...sources]
+                }))
+              } else if (data.type === 'agent') {
+                agents.push(data.agent)
+                setStreamingMessage(prev => ({
+                  ...prev,
+                  agents: [...agents]
+                }))
+              } else if (data.type === 'done') {
+                break
+              }
+            } catch (e) {}
+          }
+        }
+      }
+
+      const finalAssistantMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: accumulatedContent,
+        reasoning: reasoningContent,
+        sources: sources,
+        agents: agents,
+        timestamp: new Date().toISOString()
+      }
+
+      onUpdateMessages([...updatedMessages, finalAssistantMessage])
+      setStreamingMessage(null)
+    } catch (error) {
+      if (error.name !== 'AbortError') {
+        const errorMessage = {
+          id: (Date.now() + 1).toString(),
+          role: 'assistant',
+          content: 'Maaf, terjadi kesalahan. Silakan coba lagi.',
+          timestamp: new Date().toISOString()
+        }
+        onUpdateMessages([...updatedMessages, errorMessage])
+      }
+    } finally {
+      setIsLoading(false)
+      abortControllerRef.current = null
+    }
+  }, [inputValue, isLoading, messages, session.id, onUpdateMessages, generateSessionName, isThinkingMode, isSearchMode])
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
     }
   }
 
-  const handleCancelDelete = () => {
-    setDeleteConfirmId(null)
+  const handleExpand = () => {
+    setIsExpanded(true)
   }
 
-  const startEditing = (session) => {
-    setEditingId(session.id)
-    setEditName(session.name)
-  }
-
-  const saveEditing = () => {
-    if (editingId && editName.trim()) {
-      onUpdateName(editingId, editName.trim())
-    }
-    setEditingId(null)
-    setEditName('')
+  const handleCollapse = () => {
+    setIsExpanded(false)
   }
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <>
-          <motion.aside
-            initial={{ x: '-100%' }}
-            animate={{ x: 0 }}
-            exit={{ x: '-100%' }}
-            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-            className="fixed top-0 left-0 h-full w-80 z-50 glass-sidebar shadow-2xl"
+    <div className="flex flex-col h-full">
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-dark-900/95 backdrop-blur-lg flex items-center justify-center p-4"
+            onClick={handleCollapse}
           >
-            <div className="flex flex-col h-full">
-              <div className="flex items-center justify-between p-5 border-b border-white/10">
-                <h2 className="text-lg font-semibold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
-                  Riwayat Chat
-                </h2>
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="w-full max-w-4xl h-96"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="relative h-full">
+                <textarea
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Tanyakan apapun..."
+                  className="w-full h-full bg-dark-800 border border-white/10 rounded-2xl p-5 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 text-lg"
+                  autoFocus
+                />
                 <button
-                  onClick={onClose}
-                  className="p-2 rounded-xl hover:bg-white/10 transition-all duration-200"
+                  onClick={handleCollapse}
+                  className="absolute top-3 right-3 p-2 rounded-lg bg-dark-700 hover:bg-dark-600 transition"
                 >
-                  <X size={20} />
+                  <Minimize2 size={20} />
+                </button>
+                <button
+                  onClick={sendMessage}
+                  className="absolute bottom-3 right-3 p-3 rounded-xl bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 transition shadow-lg"
+                >
+                  <Send size={20} />
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-              <div className="p-4">
-                <button
-                  onClick={handleCreateNew}
-                  className={`w-full flex items-center justify-center gap-2 py-3 rounded-xl transition-all duration-200 ${
-                    sessions.length >= maxSessions
-                      ? 'bg-gray-800/50 text-gray-500 cursor-not-allowed'
-                      : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white shadow-lg'
-                  }`}
-                  disabled={sessions.length >= maxSessions}
-                >
-                  <Plus size={18} />
-                  <span>Chat Baru</span>
-                </button>
-                
-                <AnimatePresence>
-                  {showLimitAlert && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="mt-3 p-3 rounded-xl bg-yellow-500/20 border border-yellow-500/30 flex items-center gap-2 text-sm text-yellow-400"
-                    >
-                      <AlertCircle size={16} />
-                      <span>Batas maksimal {maxSessions} sesi chat. Hapus salah satu untuk membuat baru.</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-3 pb-5 space-y-2">
-                {sortedSessions.map((session) => (
-                  <motion.div
-                    key={session.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    className={`group relative rounded-xl transition-all duration-200 ${
-                      activeSessionId === session.id
-                        ? 'bg-gradient-to-r from-primary-500/20 to-primary-600/20 border border-primary-500/30'
-                        : 'hover:bg-white/5'
-                    }`}
-                  >
-                    {deleteConfirmId === session.id ? (
-                      <div className="p-3">
-                        <p className="text-sm text-gray-300 mb-3">Hapus sesi ini?</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={handleConfirmDelete}
-                            className="flex-1 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm hover:bg-red-500/30 transition"
-                          >
-                            Ya, Hapus
-                          </button>
-                          <button
-                            onClick={handleCancelDelete}
-                            className="flex-1 py-2 rounded-lg bg-white/10 text-gray-300 text-sm hover:bg-white/20 transition"
-                          >
-                            Batal
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div
-                        className={`p-3 cursor-pointer transition-all duration-200 ${
-                          activeSessionId === session.id ? 'pr-20' : 'pr-20 group-hover:pr-20'
-                        }`}
-                        onClick={() => onSelectSession(session.id)}
-                      >
-                        {editingId === session.id ? (
-                          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            <input
-                              type="text"
-                              value={editName}
-                              onChange={(e) => setEditName(e.target.value)}
-                              onKeyDown={(e) => e.key === 'Enter' && saveEditing()}
-                              className="flex-1 bg-dark-700 border border-white/20 rounded-lg px-2 py-1 text-sm focus:outline-none focus:border-primary-500"
-                              autoFocus
-                            />
-                            <button
-                              onClick={saveEditing}
-                              className="p-1 rounded-lg bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 transition"
-                            >
-                              <Check size={14} />
-                            </button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-2">
-                              {session.pinned && <Pin size={12} className="text-primary-400" />}
-                              <span className={`text-sm truncate flex-1 ${activeSessionId === session.id ? 'text-primary-400 font-medium' : 'text-gray-300'}`}>
-                                {session.name}
-                              </span>
-                            </div>
-                            <div className="text-xs text-gray-500 mt-1">
-                              {new Date(session.createdAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    )}
-                    
-                    {deleteConfirmId !== session.id && (
-                      <div className="absolute right-2 top-1/2 -translate-y-1/2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onTogglePin(session.id); }}
-                          className="p-1.5 rounded-lg hover:bg-white/10 transition"
-                          title={session.pinned ? 'Lepas pin' : 'Pin'}
-                        >
-                          {session.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); startEditing(session); }}
-                          className="p-1.5 rounded-lg hover:bg-white/10 transition"
-                          title="Edit nama"
-                        >
-                          <Edit2 size={14} />
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleDeleteClick(session.id); }}
-                          className="p-1.5 rounded-lg hover:bg-red-500/20 hover:text-red-400 transition"
-                          title="Hapus"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    )}
-                  </motion.div>
-                ))}
-                
-                {sessions.length === 0 && (
-                  <div className="text-center text-gray-500 py-10">
-                    <p className="text-sm">Belum ada sesi chat</p>
-                    <button onClick={handleCreateNew} className="mt-3 text-primary-400 text-sm hover:underline">
-                      Buat sesi baru
-                    </button>
-                  </div>
-                )}
-              </div>
-              
-              <div className="p-4 border-t border-white/10 text-xs text-gray-500 text-center">
-                {sessions.length}/{maxSessions} sesi chat
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-4">
+        {messages.length === 0 && !isLoading && !streamingMessage && (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <div className="w-20 h-20 mb-6 rounded-2xl bg-gradient-to-br from-primary-500 to-primary-700 flex items-center justify-center">
+              <span className="text-3xl">🤖</span>
+            </div>
+            <h2 className="text-2xl font-semibold mb-2">Shadow Swarm AI</h2>
+            <p className="text-gray-400 max-w-md">Tanyakan apapun. 25 AI models siap membantu Anda.</p>
+          </div>
+        )}
+        
+        {messages.map((message, idx) => (
+          <MessageBubble key={message.id || idx} message={message} />
+        ))}
+        
+        {streamingMessage && (
+          <MessageBubble message={streamingMessage} isStreaming={true} />
+        )}
+        
+        {isLoading && !streamingMessage && (
+          <div className="flex justify-start">
+            <div className="message-bubble-ai px-5 py-3">
+              <div className="flex gap-1.5">
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-loading-dot" style={{ animationDelay: '0s' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-loading-dot" style={{ animationDelay: '0.2s' }}></div>
+                <div className="w-2 h-2 bg-gray-400 rounded-full animate-loading-dot" style={{ animationDelay: '0.4s' }}></div>
               </div>
             </div>
-          </motion.aside>
-        </>
-      )}
-    </AnimatePresence>
+          </div>
+        )}
+        
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="p-4 border-t border-white/10">
+        <div className="flex gap-2 mb-3">
+          <button
+            onClick={() => setIsThinkingMode(!isThinkingMode)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 ${
+              isThinkingMode
+                ? 'bg-purple-500/20 border border-purple-500/50 text-purple-400'
+                : 'bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10'
+            }`}
+          >
+            <Brain size={16} />
+            <span className="text-sm">Berpikir</span>
+          </button>
+          <button
+            onClick={() => setIsSearchMode(!isSearchMode)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-200 ${
+              isSearchMode
+                ? 'bg-green-500/20 border border-green-500/50 text-green-400'
+                : 'bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10'
+            }`}
+          >
+            <Search size={16} />
+            <span className="text-sm">Cari</span>
+          </button>
+        </div>
+
+        <div className="relative">
+          <textarea
+            ref={textareaRef}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Tanyakan apapun..."
+            rows={1}
+            className="w-full bg-dark-800 border border-white/10 rounded-2xl pl-5 pr-24 py-4 text-white placeholder-gray-500 resize-none focus:outline-none focus:border-primary-500 transition-all"
+            style={{ maxHeight: '200px', overflowY: 'auto' }}
+          />
+          <div className="absolute right-2 bottom-2 flex gap-1">
+            <button
+              onClick={handleExpand}
+              className="p-2 rounded-lg hover:bg-white/10 transition"
+              title="Perbesar"
+            >
+              <Maximize2 size={18} />
+            </button>
+            <button
+              onClick={sendMessage}
+              disabled={isLoading || !inputValue.trim()}
+              className={`p-2 rounded-xl transition-all duration-200 ${
+                isLoading || !inputValue.trim()
+                  ? 'bg-gray-700/50 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white shadow-lg'
+              }`}
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   )
 }
 
-export default Sidebar
+export default ChatInterface

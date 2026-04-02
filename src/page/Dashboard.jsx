@@ -1,5 +1,4 @@
 import React from 'react'
-import { motion } from 'framer-motion'
 import { Activity, Cpu, Database, Zap, Server, Globe } from 'lucide-react'
 
 const Dashboard = () => {
@@ -24,58 +23,39 @@ const Dashboard = () => {
   ]
 
   return (
-    <div className="h-full overflow-y-auto p-6">
-      <div className="max-w-7xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mb-8"
-        >
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
-            Dashboard
-          </h1>
-          <p className="text-gray-400 mt-1">Pantau status 25 AI Models Shadow Swarm</p>
-        </motion.div>
+    <div className="dashboard-container">
+      <div className="dashboard-header">
+        <h1>Dashboard</h1>
+        <p>Pantau status 25 AI Models Shadow Swarm</p>
+      </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-8">
-          {stats.map((stat, idx) => (
-            <motion.div
-              key={idx}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: idx * 0.05 }}
-              className="glass-effect rounded-2xl p-5"
-            >
-              <div className="flex items-center justify-between mb-3">
-                <div className={`p-2 rounded-xl bg-gradient-to-br ${stat.color} bg-opacity-20`}>
-                  <stat.icon size={20} className="text-white" />
-                </div>
-                <span className="text-2xl font-bold text-white">{stat.value}</span>
+      <div className="stats-grid">
+        {stats.map((stat, idx) => (
+          <div key={idx} className="stat-card">
+            <div className="stat-header">
+              <div className={`stat-icon`}>
+                <stat.icon size={20} className="text-primary-400" />
               </div>
-              <p className="text-gray-400 text-sm">{stat.label}</p>
-            </motion.div>
+              <span className="stat-value">{stat.value}</span>
+            </div>
+            <p className="stat-label">{stat.label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="agents-section-dash">
+        <h3>Status AI Agents</h3>
+        <div className="agents-grid">
+          {agents.map((agent, idx) => (
+            <div key={idx} className="agent-item">
+              <div className="agent-info">
+                <h4>{agent.name}</h4>
+                <p>{agent.role}</p>
+              </div>
+              <div className={`status-dot ${agent.status === 'active' ? 'active' : 'idle'}`} />
+            </div>
           ))}
         </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="glass-effect rounded-2xl p-5"
-        >
-          <h2 className="text-lg font-semibold mb-4">Status AI Agents</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {agents.map((agent, idx) => (
-              <div key={idx} className="flex items-center justify-between p-3 rounded-xl bg-white/5">
-                <div>
-                  <p className="font-medium text-sm">{agent.name}</p>
-                  <p className="text-xs text-gray-500">{agent.role}</p>
-                </div>
-                <div className={`w-2 h-2 rounded-full ${agent.status === 'active' ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
-              </div>
-            ))}
-          </div>
-        </motion.div>
       </div>
     </div>
   )

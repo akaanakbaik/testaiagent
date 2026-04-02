@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import ChatInterface from './components/ChatInterface'
 import Sidebar from './components/Sidebar'
 import PageSidebar from './components/PageSidebar'
@@ -75,15 +75,12 @@ function App() {
   }, [])
 
   const deleteSession = useCallback((sessionId) => {
-    const sessionToDelete = sessions.find(s => s.id === sessionId)
-    if (!sessionToDelete) return
-    
     setSessions(prev => prev.filter(s => s.id !== sessionId))
     
     if (activeSessionId === sessionId) {
-      const remainingSessions = sessions.filter(s => s.id !== sessionId)
-      if (remainingSessions.length > 0) {
-        setActiveSessionId(remainingSessions[0].id)
+      const remaining = sessions.filter(s => s.id !== sessionId)
+      if (remaining.length > 0) {
+        setActiveSessionId(remaining[0].id)
       } else {
         const newSession = {
           id: Date.now().toString(),
@@ -106,7 +103,7 @@ function App() {
 
   const activeSession = sessions.find(s => s.id === activeSessionId)
 
-  const tripleClickHandler = useCallback(() => {
+  const handleTripleClick = useCallback(() => {
     let clickCount = 0
     let timeoutId = null
     return () => {
@@ -121,13 +118,13 @@ function App() {
     }
   }, [])
 
-  const handleTripleClick = tripleClickHandler()
+  const tripleClickHandler = handleTripleClick()
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-dark-900" onClick={handleTripleClick}>
+    <div className="app-container" onClick={tripleClickHandler}>
       {(isLeftSidebarOpen || isRightSidebarOpen) && (
         <div 
-          className="absolute inset-0 bg-black/60 backdrop-blur-sm z-40 transition-all duration-300"
+          className="overlay"
           onClick={() => {
             setIsLeftSidebarOpen(false)
             setIsRightSidebarOpen(false)
@@ -158,34 +155,30 @@ function App() {
         }}
       />
       
-      <div className={`h-full w-full transition-all duration-300 ${(isLeftSidebarOpen || isRightSidebarOpen) ? 'pointer-events-none' : 'pointer-events-auto'}`}>
-        <div className="relative h-full w-full">
-          <button
-            onClick={() => setIsLeftSidebarOpen(true)}
-            className="fixed top-5 left-5 z-30 p-2 rounded-xl glass-effect hover:bg-white/10 transition-all duration-200"
-          >
-            <Menu size={22} strokeWidth={1.5} />
-          </button>
-          
-          <button
-            onClick={() => setIsRightSidebarOpen(true)}
-            className="fixed top-5 right-5 z-30 p-2 rounded-xl glass-effect hover:bg-white/10 transition-all duration-200"
-          >
-            <FileStack size={22} strokeWidth={1.5} />
-          </button>
-          
-          {currentPage === 'chat' && activeSession && (
-            <ChatInterface
-              session={activeSession}
-              onUpdateMessages={(messages) => updateSessionMessages(activeSessionId, messages)}
-              onUpdateSessionName={(name) => updateSessionName(activeSessionId, name)}
-            />
-          )}
-          
-          {currentPage === 'dashboard' && (
-            <Dashboard />
-          )}
-        </div>
+      <div className={`main-content ${(isLeftSidebarOpen || isRightSidebarOpen) ? 'blurred' : ''}`}>
+        <button
+          onClick={() => setIsLeftSidebarOpen(true)}
+          className="menu-btn-left"
+        >
+          <Menu size={22} strokeWidth={1.5} />
+        </button>
+        
+        <button
+          onClick={() => setIsRightSidebarOpen(true)}
+          className="menu-btn-right"
+        >
+          <FileStack size={22} strokeWidth={1.5} />
+        </button>
+        
+        {currentPage === 'chat' && activeSession && (
+          <ChatInterface
+            session={activeSession}
+            onUpdateMessages={(messages) => updateSessionMessages(activeSessionId, messages)}
+            onUpdateSessionName={(name) => updateSessionName(activeSessionId, name)}
+          />
+        )}
+        
+        {currentPage === 'dashboard' && <Dashboard />}
       </div>
     </div>
   )

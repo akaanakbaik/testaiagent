@@ -3,15 +3,14 @@ import { Send, Search, Brain, Maximize2, Minimize2, X } from 'lucide-react'
 import MessageBubble from './MessageBubble'
 
 const ChatInterface = ({ session, onUpdateMessages, onUpdateSessionName }) => {
-  const [inputValue, setInputValue] = useState('')
+  const [input, setInput] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const [isThinkingMode, setIsThinkingMode] = useState(false)
-  const [isSearchMode, setIsSearchMode] = useState(false)
+  const [isThinking, setIsThinking] = useState(false)
+  const [isSearch, setIsSearch] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
-  const [streamingMessage, setStreamingMessage] = useState(null)
+  const [streamingMsg, setStreamingMsg] = useState(null)
   const messagesEndRef = useRef(null)
   const textareaRef = useRef(null)
-
   const messages = session.messages || []
 
   const scrollToBottom = useCallback(() => {
@@ -20,152 +19,106 @@ const ChatInterface = ({ session, onUpdateMessages, onUpdateSessionName }) => {
 
   useEffect(() => {
     scrollToBottom()
-  }, [messages, streamingMessage, scrollToBottom])
+  }, [messages, streamingMsg, scrollToBottom])
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto'
-      const newHeight = Math.min(textareaRef.current.scrollHeight, 200)
-      textareaRef.current.style.height = `${newHeight}px`
+      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 120) + 'px'
     }
-  }, [inputValue])
+  }, [input])
 
-  const generateSessionName = useCallback(async (firstMessage) => {
-    const newName = firstMessage.slice(0, 40) + (firstMessage.length > 40 ? '...' : '')
-    onUpdateSessionName(newName)
+  const generateTitle = useCallback((firstMsg) => {
+    const title = firstMsg.slice(0, 35) + (firstMsg.length > 35 ? '...' : '')
+    onUpdateSessionName(title)
   }, [onUpdateSessionName])
 
-  const sendMessage = useCallback(async () => {
-    if (!inputValue.trim() || isLoading) return
-
-    const userMessage = {
+  const sendMessage = async () => {
+    if (!input.trim() || isLoading) return
+    const userMsg = {
       id: Date.now().toString(),
       role: 'user',
-      content: inputValue.trim(),
+      content: input.trim(),
       timestamp: new Date().toISOString()
     }
-
-    const updatedMessages = [...messages, userMessage]
-    onUpdateMessages(updatedMessages)
-    setInputValue('')
+    const updated = [...messages, userMsg]
+    onUpdateMessages(updated)
+    setInput('')
     setIsLoading(true)
-    setStreamingMessage(null)
+    setStreamingMsg(null)
 
-    const isFirstMessage = messages.length === 0
-    if (isFirstMessage) {
-      await generateSessionName(userMessage.content)
-    }
+    if (messages.length === 0) generateTitle(userMsg.content)
 
     setTimeout(() => {
-      const assistantMessage = {
+      const assistantMsg = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: `**Demo Response:**\n\nKamu bertanya: "${userMessage.content}"\n\nMode: ${isThinkingMode ? 'Berpikir ✓' : 'Fast'} | ${isSearchMode ? 'Search ✓' : 'No Search'}\n\n_Fitur backend akan segera terhubung._`,
+        content: `**Demo Response**\n\nAnda bertanya: "${userMsg.content}"\n\nMode: ${isThinking ? 'Berpikir ✓' : 'Fast'} | ${isSearch ? 'Search ✓' : 'No Search'}\n\n_Backend akan segera terhubung._`,
         timestamp: new Date().toISOString(),
         sources: [],
         agents: ['DEMO']
       }
-      onUpdateMessages([...updatedMessages, assistantMessage])
+      onUpdateMessages([...updated, assistantMsg])
       setIsLoading(false)
-    }, 1000)
-  }, [inputValue, isLoading, messages, onUpdateMessages, generateSessionName, isThinkingMode, isSearchMode])
+    }, 800)
+  }
 
-  const handleKeyDown = (e) => {
+  const handleKey = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       sendMessage()
     }
   }
 
-  const handleExpand = () => setIsExpanded(true)
-  const handleCollapse = () => setIsExpanded(false)
+  const toggleExpand = () => setIsExpanded(true)
+  const closeExpand = () => setIsExpanded(false)
 
   return (
     <div className="chat-container">
       {isExpanded && (
-        <div className="expanded-overlay" onClick={handleCollapse}>
-          <div className="expanded-modal" onClick={(e) => e.stopPropagation()}>
-            <textarea
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Tanyakan apapun..."
-              autoFocus
-            />
-            <button onClick={handleCollapse} className="collapse-btn">
-              <Minimize2 size={20} />
-            </button>
-            <button onClick={sendMessage} className="send-expanded-btn">
-              <Send size={20} />
-            </button>
+        <div className="modal-overlay" onClick={closeExpand}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <textarea value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey} placeholder="Tanyakan apapun..." autoFocus />
+            <div className="modal-actions">
+              <button onClick={closeExpand}>Batal</button>
+              <button onClick={() => { sendMessage(); closeExpand() }}>Kirim</button>
+            </div>
           </div>
         </div>
       )}
-
-      <div className="messages-container">
-        {messages.length === 0 && !isLoading && !streamingMessage && (
-          <div className="welcome-screen">
+      <div className="messages-area">
+        {messages.length === 0 && !isLoading && !streamingMsg && (
+          <div className="welcome">
             <div className="welcome-icon">🤖</div>
             <h2>Shadow Swarm AI</h2>
-            <p>25 AI models siap membantu Anda</p>
+            <p>25 AI models siap membantu</p>
           </div>
         )}
-        
-        {messages.map((message, idx) => (
-          <MessageBubble key={message.id || idx} message={message} />
-        ))}
-        
-        {streamingMessage && <MessageBubble message={streamingMessage} isStreaming={true} />}
-        
-        {isLoading && !streamingMessage && (
-          <div className="loading-bubble">
-            <div className="message-bubble-ai">
-              <div className="typing-indicator">
-                <span></span><span></span><span></span>
-              </div>
+        {messages.map((msg, idx) => <MessageBubble key={msg.id || idx} message={msg} />)}
+        {streamingMsg && <MessageBubble message={streamingMsg} isStreaming />}
+        {isLoading && !streamingMsg && (
+          <div className="message assistant">
+            <div className="bubble assistant">
+              <div className="typing"><span></span><span></span><span></span></div>
             </div>
           </div>
         )}
-        
         <div ref={messagesEndRef} />
       </div>
-
       <div className="input-area">
-        <div className="mode-buttons">
-          <button
-            onClick={() => setIsThinkingMode(!isThinkingMode)}
-            className={`mode-btn ${isThinkingMode ? 'active-thinking' : ''}`}
-          >
-            <Brain size={16} />
-            <span>Berpikir</span>
+        <div className="mode-row">
+          <button className={`mode-btn ${isThinking ? 'active-thinking' : ''}`} onClick={() => setIsThinking(!isThinking)}>
+            <Brain size={14} /> Berpikir
           </button>
-          <button
-            onClick={() => setIsSearchMode(!isSearchMode)}
-            className={`mode-btn ${isSearchMode ? 'active-search' : ''}`}
-          >
-            <Search size={16} />
-            <span>Cari</span>
+          <button className={`mode-btn ${isSearch ? 'active-search' : ''}`} onClick={() => setIsSearch(!isSearch)}>
+            <Search size={14} /> Cari
           </button>
         </div>
-
         <div className="input-wrapper">
-          <textarea
-            ref={textareaRef}
-            value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Tanyakan apapun..."
-            rows={1}
-          />
-          <button onClick={handleExpand} className="expand-btn" title="Perbesar">
-            <Maximize2 size={18} />
-          </button>
-          <button
-            onClick={sendMessage}
-            disabled={isLoading || !inputValue.trim()}
-            className={`send-btn ${isLoading || !inputValue.trim() ? 'disabled' : ''}`}
-          >
-            <Send size={18} />
+          <textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={handleKey} placeholder="Tanyakan apapun..." rows={1} />
+          <button className="expand-btn" onClick={toggleExpand}><Maximize2 size={16} /></button>
+          <button className="send-btn" onClick={sendMessage} disabled={isLoading || !input.trim()}>
+            <Send size={16} />
           </button>
         </div>
       </div>

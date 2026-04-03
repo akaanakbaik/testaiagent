@@ -3,12 +3,12 @@ import { Activity, Cpu, Database, Zap, Server, Globe } from 'lucide-react'
 
 const Dashboard = () => {
   const stats = [
-    { icon: Activity, label: 'AI Models Aktif', value: '25', color: 'from-blue-500 to-cyan-500' },
-    { icon: Cpu, label: 'CPU Usage', value: '23%', color: 'from-green-500 to-emerald-500' },
-    { icon: Database, label: 'Memory', value: '1.2GB / 4GB', color: 'from-purple-500 to-pink-500' },
-    { icon: Zap, label: 'Requests Today', value: '47', color: 'from-yellow-500 to-orange-500' },
-    { icon: Server, label: 'Uptime', value: '99.97%', color: 'from-indigo-500 to-blue-500' },
-    { icon: Globe, label: 'Active Sessions', value: '3', color: 'from-red-500 to-rose-500' },
+    { icon: Activity, label: 'AI Models Aktif', value: '25', color: '#3b82f6' },
+    { icon: Cpu, label: 'CPU Usage', value: '23%', color: '#10b981' },
+    { icon: Database, label: 'Memory', value: '1.2GB / 4GB', color: '#8b5cf6' },
+    { icon: Zap, label: 'Requests Today', value: '47', color: '#f59e0b' },
+    { icon: Server, label: 'Uptime', value: '99.97%', color: '#06b6d4' },
+    { icon: Globe, label: 'Active Sessions', value: '3', color: '#ef4444' },
   ]
 
   const agents = [
@@ -23,39 +23,28 @@ const Dashboard = () => {
   ]
 
   return (
-    <div className="dashboard-container">
-      <div className="dashboard-header">
-        <h1>Dashboard</h1>
-        <p>Pantau status 25 AI Models Shadow Swarm</p>
-      </div>
-
+    <div className="dashboard">
+      <h1>Dashboard</h1>
+      <div className="dashboard-sub">Pantau 25 AI Models Shadow Swarm</div>
       <div className="stats-grid">
         {stats.map((stat, idx) => (
           <div key={idx} className="stat-card">
-            <div className="stat-header">
-              <div className={`stat-icon`}>
-                <stat.icon size={20} className="text-primary-400" />
-              </div>
-              <span className="stat-value">{stat.value}</span>
-            </div>
-            <p className="stat-label">{stat.label}</p>
+            <stat.icon size={18} color={stat.color} />
+            <div className="stat-value">{stat.value}</div>
+            <div className="stat-label">{stat.label}</div>
           </div>
         ))}
       </div>
-
-      <div className="agents-section-dash">
-        <h3>Status AI Agents</h3>
-        <div className="agents-grid">
-          {agents.map((agent, idx) => (
-            <div key={idx} className="agent-item">
-              <div className="agent-info">
-                <h4>{agent.name}</h4>
-                <p>{agent.role}</p>
-              </div>
-              <div className={`status-dot ${agent.status === 'active' ? 'active' : 'idle'}`} />
+      <div className="agents-grid">
+        {agents.map((agent, idx) => (
+          <div key={idx} className="agent-row">
+            <div>
+              <div className="agent-name">{agent.name}</div>
+              <div className="agent-role">{agent.role}</div>
             </div>
-          ))}
-        </div>
+            <div className={`agent-status ${agent.status}`} />
+          </div>
+        ))}
       </div>
     </div>
   )

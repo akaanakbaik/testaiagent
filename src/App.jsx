@@ -1,23 +1,21 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import ChatInterface from './components/ChatInterface'
-import Sidebar from './components/Sidebar'
-import PageSidebar from './components/PageSidebar'
-import Dashboard from './page/Dashboard'
-import { Menu, FileStack } from 'lucide-react'
+import SidebarLeft from './components/SidebarLeft'
+import SidebarRight from './components/SidebarRight'
+import Dashboard from './components/Dashboard'
+import { Menu, Layers } from 'lucide-react'
 
 function App() {
-  const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(false)
-  const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false)
+  const [leftOpen, setLeftOpen] = useState(false)
+  const [rightOpen, setRightOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState('chat')
   const [sessions, setSessions] = useState(() => {
     const saved = localStorage.getItem('chatSessions')
     if (saved) {
       try {
         const parsed = JSON.parse(saved)
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed
-        }
-      } catch (e) {}
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed
+      } catch(e) {}
     }
     return [{
       id: Date.now().toString(),
@@ -29,26 +27,19 @@ function App() {
   })
   const [activeSessionId, setActiveSessionId] = useState(() => {
     const saved = localStorage.getItem('activeSessionId')
-    if (saved && sessions.find(s => s.id === saved)) {
-      return saved
-    }
+    if (saved && sessions.find(s => s.id === saved)) return saved
     return sessions[0]?.id || null
   })
 
   useEffect(() => {
     localStorage.setItem('chatSessions', JSON.stringify(sessions))
   }, [sessions])
-
   useEffect(() => {
-    if (activeSessionId) {
-      localStorage.setItem('activeSessionId', activeSessionId)
-    }
+    if (activeSessionId) localStorage.setItem('activeSessionId', activeSessionId)
   }, [activeSessionId])
 
   const createNewSession = useCallback(() => {
-    if (sessions.length >= 7) {
-      return false
-    }
+    if (sessions.length >= 7) return false
     const newSession = {
       id: Date.now().toString(),
       name: 'Percakapan Baru',
@@ -58,128 +49,76 @@ function App() {
     }
     setSessions(prev => [newSession, ...prev])
     setActiveSessionId(newSession.id)
-    setIsLeftSidebarOpen(false)
+    setLeftOpen(false)
     return true
   }, [sessions.length])
 
-  const updateSessionName = useCallback((sessionId, newName) => {
-    setSessions(prev => prev.map(s => 
-      s.id === sessionId ? { ...s, name: newName.slice(0, 50) } : s
-    ))
+  const updateSessionName = useCallback((id, name) => {
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, name: name.slice(0, 40) } : s))
   }, [])
 
-  const togglePinSession = useCallback((sessionId) => {
-    setSessions(prev => prev.map(s =>
-      s.id === sessionId ? { ...s, pinned: !s.pinned } : s
-    ))
+  const togglePin = useCallback((id) => {
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, pinned: !s.pinned } : s))
   }, [])
 
-  const deleteSession = useCallback((sessionId) => {
-    setSessions(prev => prev.filter(s => s.id !== sessionId))
-    
-    if (activeSessionId === sessionId) {
-      const remaining = sessions.filter(s => s.id !== sessionId)
-      if (remaining.length > 0) {
-        setActiveSessionId(remaining[0].id)
-      } else {
-        const newSession = {
-          id: Date.now().toString(),
-          name: 'Percakapan Baru',
-          pinned: false,
-          createdAt: new Date().toISOString(),
-          messages: []
-        }
-        setSessions([newSession])
-        setActiveSessionId(newSession.id)
+  const deleteSession = useCallback((id) => {
+    setSessions(prev => prev.filter(s => s.id !== id))
+    if (activeSessionId === id) {
+      const remaining = sessions.filter(s => s.id !== id)
+      if (remaining.length > 0) setActiveSessionId(remaining[0].id)
+      else {
+        const newS = { id: Date.now().toString(), name: 'Percakapan Baru', pinned: false, createdAt: new Date().toISOString(), messages: [] }
+        setSessions([newS])
+        setActiveSessionId(newS.id)
       }
     }
-  }, [sessions, activeSessionId])
+  }, [activeSessionId, sessions])
 
-  const updateSessionMessages = useCallback((sessionId, messages) => {
-    setSessions(prev => prev.map(s =>
-      s.id === sessionId ? { ...s, messages } : s
-    ))
+  const updateSessionMessages = useCallback((id, messages) => {
+    setSessions(prev => prev.map(s => s.id === id ? { ...s, messages } : s))
   }, [])
 
   const activeSession = sessions.find(s => s.id === activeSessionId)
 
-  const handleTripleClick = useCallback(() => {
-    let clickCount = 0
-    let timeoutId = null
-    return () => {
-      clickCount++
-      if (timeoutId) clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => { clickCount = 0 }, 300)
-      if (clickCount === 3) {
-        setIsLeftSidebarOpen(false)
-        setIsRightSidebarOpen(false)
-        clickCount = 0
-      }
-    }
-  }, [])
-
-  const tripleClickHandler = handleTripleClick()
-
   return (
-    <div className="app-container" onClick={tripleClickHandler}>
-      {(isLeftSidebarOpen || isRightSidebarOpen) && (
-        <div 
-          className="overlay"
-          onClick={() => {
-            setIsLeftSidebarOpen(false)
-            setIsRightSidebarOpen(false)
-          }}
-        />
-      )}
-      
-      <Sidebar 
-        isOpen={isLeftSidebarOpen}
-        onClose={() => setIsLeftSidebarOpen(false)}
+    <div className="app">
+      <SidebarLeft
+        isOpen={leftOpen}
+        onClose={() => setLeftOpen(false)}
         sessions={sessions}
-        activeSessionId={activeSessionId}
-        onSelectSession={setActiveSessionId}
-        onCreateNew={createNewSession}
+        activeId={activeSessionId}
+        onSelect={setActiveSessionId}
+        onCreate={createNewSession}
         onUpdateName={updateSessionName}
-        onTogglePin={togglePinSession}
+        onTogglePin={togglePin}
         onDelete={deleteSession}
         maxSessions={7}
       />
-      
-      <PageSidebar 
-        isOpen={isRightSidebarOpen}
-        onClose={() => setIsRightSidebarOpen(false)}
+      <SidebarRight
+        isOpen={rightOpen}
+        onClose={() => setRightOpen(false)}
         currentPage={currentPage}
-        onPageChange={(page) => {
-          setCurrentPage(page)
-          setIsRightSidebarOpen(false)
-        }}
+        onPageChange={(page) => { setCurrentPage(page); setRightOpen(false) }}
       />
-      
-      <div className={`main-content ${(isLeftSidebarOpen || isRightSidebarOpen) ? 'blurred' : ''}`}>
-        <button
-          onClick={() => setIsLeftSidebarOpen(true)}
-          className="menu-btn-left"
-        >
-          <Menu size={22} strokeWidth={1.5} />
+      <div className={`main-content ${(leftOpen || rightOpen) ? 'blurred' : ''}`}>
+        <button className="menu-btn" onClick={() => setLeftOpen(true)}>
+          <Menu size={20} />
         </button>
-        
-        <button
-          onClick={() => setIsRightSidebarOpen(true)}
-          className="menu-btn-right"
-        >
-          <FileStack size={22} strokeWidth={1.5} />
+        <button className="menu-btn menu-btn-right" onClick={() => setRightOpen(true)}>
+          <Layers size={20} />
         </button>
-        
         {currentPage === 'chat' && activeSession && (
           <ChatInterface
             session={activeSession}
-            onUpdateMessages={(messages) => updateSessionMessages(activeSessionId, messages)}
+            onUpdateMessages={(msgs) => updateSessionMessages(activeSessionId, msgs)}
             onUpdateSessionName={(name) => updateSessionName(activeSessionId, name)}
           />
         )}
-        
         {currentPage === 'dashboard' && <Dashboard />}
       </div>
+      {(leftOpen || rightOpen) && (
+        <div className="overlay active" onClick={() => { setLeftOpen(false); setRightOpen(false) }} />
+      )}
     </div>
   )
 }
